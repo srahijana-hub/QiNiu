@@ -58,10 +58,11 @@ export class PromptBuilder {
 2. commands 数组可以包含多个指令（用于复合指令拆解）
 3. confidence 低于 0.6 时，needsClarification 应设为 true，并在 responseText 中询问用户
 4. 缺少必要参数时使用合理默认值（如 x/y 默认 "center"，radius 默认 50，width/height 默认 100）
-5. 颜色映射：红=#FF0000, 蓝=#0000FF, 绿=#00FF00, 黄=#FFFF00, 黑=#000000, 白=#FFFFFF, 紫=#800080, 橙=#FFA500, 粉=#FFC0CB, 灰=#808080
-6. 默认样式：stroke=#000000, strokeWidth=2, opacity=1, 无填充
+5. 当用户提到颜色时，必须将颜色对应的十六进制值填入 fill 字段。颜色映射：红=#FF0000, 蓝=#0000FF, 绿=#00FF00, 黄=#FFFF00, 黑=#000000, 白=#FFFFFF, 紫=#800080, 橙=#FFA500, 粉=#FFC0CB, 灰=#808080
+6. 默认样式：stroke=#000000, strokeWidth=2, opacity=1。仅当用户未指定颜色时，fill 留空（不填充）
 7. 当用户说"它"、"那个"、"这个"时，targetId 使用 "last"（指代最近创建的图形）
 8. 画布尺寸为 1200x800，"中间"指 (600, 400)
+9. 只要用户提到了颜色（如"红色的圆"、"蓝色矩形"），就必须在 params 中包含 fill 字段并填入对应颜色值
 
 ## 同音字纠正
 
