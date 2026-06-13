@@ -1,2 +1,3 @@
 // Canvas Engine - AI-A 负责实现
-export {};
+export { CanvasEngine } from './CanvasEngine';
+export { ShapeFactory } from './ShapeFactory';
