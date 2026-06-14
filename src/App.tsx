@@ -1,163 +1,44 @@
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import { Canvas } from './components/Canvas';
 import type { CanvasHandle } from './components/Canvas';
-import { VoiceIndicator } from './components/VoiceIndicator';
-import { FeedbackPanel } from './components/FeedbackPanel';
-import { ToolBar } from './components/ToolBar';
-import { BackgroundDots } from './components/BackgroundDots';
-import { useVoiceCommands } from './hooks/useVoiceCommands';
-import { useDrawingStore } from './store/drawingStore';
-import { ShapeFactory } from './core/canvas/ShapeFactory';
-import { TransformManager } from './core/canvas/TransformManager';
-import type { Command, CommandParams } from './types/commands';
-import type { CanvasState } from './types/canvas';
+import { SpeechRecognizer } from './core/speech';
+import { ImageGenerator } from './core/image';
 import './App.css';
-
-// ============================================================
-// 常量
-// ============================================================
 
 const CW = 1200;
 const CH = 800;
 
 // ============================================================
-// Command Dispatcher（轻量内联，避免修改 core/）
+// SVG Icons
 // ============================================================
 
-function resolveTargetId(
-  targetId: string,
-  shapes: { id: string }[],
-): string | null {
-  if (targetId === 'last') return shapes.length > 0 ? shapes[shapes.length - 1].id : null;
-  return targetId;
-}
+const MicIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
+  </svg>
+);
 
-function resolveTargetIds(
-  targetId: string,
-  shapes: { id: string }[],
-): string[] {
-  if (targetId === 'all') return shapes.map((s) => s.id);
-  const id = resolveTargetId(targetId, shapes);
-  return id ? [id] : [];
-}
+const StopIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+    <rect x="6" y="6" width="12" height="12" rx="2" />
+  </svg>
+);
 
-/** 单条指令分发 */
-function dispatchCommand(cmd: Command, factory: ShapeFactory, tm: TransformManager) {
-  const store = useDrawingStore.getState();
+const TrashIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <path d="M10 11v6" /><path d="M14 11v6" />
+  </svg>
+);
 
-  switch (cmd.action) {
-    // ---- create ----
-    case 'create_circle':
-      store.addShape(factory.createCircle(cmd.params as any)); break;
-    case 'create_rect':
-      store.addShape(factory.createRect(cmd.params as any)); break;
-    case 'create_line':
-      store.addShape(factory.createLine(cmd.params as any)); break;
-    case 'create_triangle':
-      store.addShape(factory.createTriangle(cmd.params as any)); break;
-    case 'create_ellipse':
-      store.addShape(factory.createEllipse(cmd.params as any)); break;
-    case 'create_polygon':
-      store.addShape(factory.createPolygon(cmd.params as any)); break;
-    case 'create_text':
-      store.addShape(factory.createText(cmd.params as any)); break;
-
-    // ---- transform ----
-    case 'move': {
-      const p = cmd.params as any;
-      const tid = resolveTargetId(p.targetId, store.shapes);
-      if (!tid) break;
-      const s = store.shapes.find((x) => x.id === tid);
-      if (s) store.updateShape(tid, tm.moveShape(s, p.dx, p.dy));
-      break;
-    }
-    case 'scale': {
-      const p = cmd.params as any;
-      const tid = resolveTargetId(p.targetId, store.shapes);
-      if (!tid) break;
-      const s = store.shapes.find((x) => x.id === tid);
-      if (s) store.updateShape(tid, tm.scaleShape(s, p.factor));
-      break;
-    }
-    case 'rotate': {
-      const p = cmd.params as any;
-      const tid = resolveTargetId(p.targetId, store.shapes);
-      if (!tid) break;
-      const s = store.shapes.find((x) => x.id === tid);
-      if (s) store.updateShape(tid, tm.rotateShape(s, p.angle));
-      break;
-    }
-
-    // ---- delete ----
-    case 'delete_shape': {
-      const p = cmd.params as any;
-      const tid = resolveTargetId(p.targetId, store.shapes);
-      if (tid) store.removeShape(tid);
-      break;
-    }
-    case 'delete_all':
-    case 'clear':
-      store.clearAll();
-      break;
-
-    // ---- style ----
-    case 'set_color': {
-      const p = cmd.params as any;
-      const tids = resolveTargetIds(p.targetId, store.shapes);
-      const su: any = {};
-      if (p.property === 'fill' || p.property === 'both') su.fill = p.color;
-      if (p.property === 'stroke' || p.property === 'both') su.stroke = p.color;
-      for (const id of tids) store.updateShape(id, { style: su } as any);
-      break;
-    }
-    case 'set_stroke_width': {
-      const p = cmd.params as any;
-      const tids = resolveTargetIds(p.targetId, store.shapes);
-      for (const id of tids) store.updateShape(id, { style: { strokeWidth: p.width } } as any);
-      break;
-    }
-    case 'set_fill': {
-      const p = cmd.params as any;
-      const tids = resolveTargetIds(p.targetId, store.shapes);
-      for (const id of tids) {
-        const shape = store.shapes.find((x) => x.id === id);
-        store.updateShape(id, { style: { fill: p.filled ? (p.color ?? shape?.style.stroke ?? '#000000') : undefined } } as any);
-      }
-      break;
-    }
-    case 'set_line_style': {
-      const p = cmd.params as any;
-      const tids = resolveTargetIds(p.targetId, store.shapes);
-      for (const id of tids) store.updateShape(id, { style: { lineStyle: p.style } } as any);
-      break;
-    }
-    case 'set_opacity': {
-      const p = cmd.params as any;
-      const tids = resolveTargetIds(p.targetId, store.shapes);
-      for (const id of tids) store.updateShape(id, { style: { opacity: p.opacity } } as any);
-      break;
-    }
-
-    // ---- canvas ----
-    case 'undo': store.undo(); break;
-    case 'redo': store.redo(); break;
-    case 'save': {
-      // save is handled by ToolBar
-      console.log('[dispatch] save handled externally');
-      break;
-    }
-
-    case 'zoom_in':
-    case 'zoom_out':
-    case 'modify_position':
-    case 'modify_size':
-    case 'modify_props':
-      break; // 未实现，静默跳过
-
-    default:
-      console.warn('[dispatch] unknown action:', (cmd as any).action);
-  }
-}
+const SaveIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+    <polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
+  </svg>
+);
 
 // ============================================================
 // App
@@ -165,94 +46,234 @@ function dispatchCommand(cmd: Command, factory: ShapeFactory, tm: TransformManag
 
 function App() {
   const canvasRef = useRef<CanvasHandle>(null);
-  const factoryRef = useRef(new ShapeFactory(CW, CH));
-  const tmRef = useRef(new TransformManager());
+  const imageGenRef = useRef(new ImageGenerator());
+  const recognizerRef = useRef<SpeechRecognizer | null>(null);
 
-  const {
-    isListening,
-    isProcessing,
-    transcript,
-    speechError,
-    startListening,
-    stopListening,
-    processTranscript,
-    speakResponse,
-  } = useVoiceCommands();
-
+  const [isListening, setIsListening] = useState(false);
+  const [isRecognizing, setIsRecognizing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [speechError, setSpeechError] = useState('');
   const [responseText, setResponseText] = useState('');
   const [history, setHistory] = useState<string[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [lastImage, setLastImage] = useState<HTMLImageElement | null>(null);
 
-  const getCanvasState = useDrawingStore((s) => s.getCanvasState);
-
-  // ========== 语音 → LLM → 绘图 完整流程 ==========
-  const handleStopListening = useCallback(async () => {
-    stopListening();
-
-    if (!transcript.trim()) return;
-
-    // 获取当前画布状态
-    const canvasState: CanvasState = getCanvasState();
-
+  // 生成图片的核心函数
+  const generateImage = useCallback(async (prompt: string) => {
+    setIsGenerating(true);
+    setResponseText('正在生成图片...');
     try {
-      const llmRes = await processTranscript(transcript, canvasState);
-
-      // 执行 LLM 返回的指令
-      for (const cmd of llmRes.commands) {
-        dispatchCommand(cmd, factoryRef.current, tmRef.current);
+      const img = await imageGenRef.current.generateAndLoad(prompt);
+      const canvas = canvasRef.current?.canvas;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+          const w = img.width * scale;
+          const h = img.height * scale;
+          const x = (canvas.width - w) / 2;
+          const y = (canvas.height - h) / 2;
+          ctx.drawImage(img, x, y, w, h);
+          setLastImage(img);
+        }
       }
-
-      // 更新反馈面板
-      setResponseText(llmRes.responseText);
-      setHistory((prev) => [`🎙 ${transcript}`, ...prev].slice(0, 20));
-
-      // 语音回复
-      if (llmRes.responseText) speakResponse(llmRes.responseText);
-    } catch {
-      // LLM 解析失败已在 hook 内降级，这里兜底
-      setResponseText('解析指令时出现问题，请重试');
+      setResponseText(`已生成: "${prompt}"`);
+      setHistory((prev) => [prompt, ...prev].slice(0, 20));
+    } catch (err) {
+      setResponseText(`生成失败: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setIsGenerating(false);
     }
-  }, [transcript, stopListening, processTranscript, getCanvasState, speakResponse]);
+  }, []);
 
-  // ========== 布局 ==========
+  // 初始化语音识别器，注册回调：识别完成 → 自动生图
+  useEffect(() => {
+    const recognizer = new SpeechRecognizer();
+    recognizerRef.current = recognizer;
+
+    recognizer.onResult((text, isFinal) => {
+      setTranscript(text);
+      if (isFinal && text.trim()) {
+        generateImage(text);
+      }
+    });
+
+    recognizer.onStateChange((state) => {
+      setIsListening(state.isListening);
+      setIsRecognizing(state.isProcessing);
+    });
+
+    recognizer.onError((msg) => {
+      setSpeechError(msg);
+    });
+
+    return () => { recognizerRef.current = null; };
+  }, [generateImage]);
+
+  const handleStartListening = useCallback(async () => {
+    setSpeechError('');
+    setTranscript('');
+    await recognizerRef.current?.start();
+  }, []);
+
+  const handleStopListening = useCallback(() => {
+    recognizerRef.current?.stop();
+    // onResult 回调会自动触发生图，不需要在这里处理
+  }, []);
+
+  const handleSubmitText = useCallback(async () => {
+    const text = inputText.trim();
+    if (!text) return;
+    setInputText('');
+    await generateImage(text);
+  }, [inputText, generateImage]);
+
+  const handleClear = () => {
+    const canvas = canvasRef.current?.canvas;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    setLastImage(null);
+    setResponseText('');
+  };
+
+  const handleSave = () => {
+    const el = canvasRef.current?.canvas;
+    if (!el) return;
+    const a = document.createElement('a');
+    a.download = `ai-drawing-${Date.now()}.png`;
+    a.href = el.toDataURL('image/png');
+    a.click();
+  };
+
+  const busy = isRecognizing || isGenerating;
+  const voiceLabel = isGenerating ? '正在生成图片...' : isRecognizing ? '正在识别语音...' : isListening ? '正在聆听...' : '等待指令';
+
   return (
     <div className="app-shell">
-      {/* 背景点阵 */}
-      <BackgroundDots />
+      {/* ========== 左侧面板 ========== */}
+      <aside className="app-sidebar">
+        {/* 标题 */}
+        <div className="sidebar-header">
+          <h1>
+            <span className="logo-icon">AI</span>
+            AI 语音绘图
+          </h1>
+          <p>说出你想画的内容，AI 帮你实现</p>
+        </div>
 
-      {/* ---- 顶部：3D 粒子声纹中枢 ---- */}
-      <header className="app-top">
-        <VoiceIndicator
-          isListening={isListening}
-          isProcessing={isProcessing}
-          transcript={transcript}
-        />
-      </header>
+        {/* 语音控制 */}
+        <div className="voice-section">
+          <div className="voice-status">
+            <span className={`voice-dot ${isListening ? 'voice-dot--listening' : ''} ${isGenerating ? 'voice-dot--processing' : ''}`} />
+            <span className="voice-status-text">{voiceLabel}</span>
+          </div>
 
-      {/* ---- 中央画布 ---- */}
-      <main className="app-canvas-stage">
-        <div className="app-canvas-frame">
-          <Canvas ref={canvasRef} />
+          <div className={`voice-transcript ${transcript ? 'voice-transcript--active' : ''}`}>
+            {transcript || '等待语音输入...'}
+          </div>
+
+          {!isListening ? (
+            <button
+              className="btn-record btn-record--start"
+              onClick={handleStartListening}
+              disabled={busy}
+            >
+              <MicIcon />
+              开始录音
+            </button>
+          ) : (
+            <button
+              className="btn-record btn-record--stop"
+              onClick={handleStopListening}
+            >
+              <StopIcon />
+              停止录音并解析
+            </button>
+          )}
+        </div>
+
+        {/* 文字输入 */}
+        <div className="text-input-section">
+          <div className="text-input-label">文字输入</div>
+          <div className="text-input-row">
+            <input
+              className="text-input"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmitText()}
+              placeholder="描述你想画的内容..."
+              disabled={busy}
+            />
+            <button
+              className="btn-generate"
+              onClick={handleSubmitText}
+              disabled={busy || !inputText.trim()}
+            >
+              生成
+            </button>
+          </div>
+        </div>
+
+        {/* 操作按钮 */}
+        <div className="actions-section">
+          <div className="actions-grid">
+            <button className="btn-action btn-action--danger" onClick={handleClear} disabled={busy || !lastImage}>
+              <TrashIcon /> 清空画布
+            </button>
+            <button className="btn-action btn-action--primary" onClick={handleSave} disabled={busy || !lastImage}>
+              <SaveIcon /> 保存图片
+            </button>
+          </div>
+        </div>
+
+        {/* 反馈面板 */}
+        <div className="feedback-section">
+          <div className="feedback-label">
+            <span className="dot" />
+            AI 回复
+          </div>
+
+          <div className="feedback-current">
+            <p className="feedback-text">
+              {responseText || <span className="feedback-text--placeholder">说出指令开始绘图...</span>}
+              {responseText && <span className="feedback-cursor">|</span>}
+            </p>
+          </div>
+
+          {speechError && <div className="speech-error">{speechError}</div>}
+
+          <div className="feedback-label" style={{ marginTop: 4 }}>指令历史</div>
+          <div className="feedback-history">
+            {history.length === 0 ? (
+              <span className="feedback-history-empty">暂无历史记录</span>
+            ) : (
+              history.map((item, i) => (
+                <div key={i} className="feedback-history-item">
+                  <span className="icon">{'>'}</span>
+                  <span className="text">{item}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* ========== 右侧画布 ========== */}
+      <main className="app-main">
+        <div className="main-header">
+          <h2>画布</h2>
+          <span className="canvas-info">{CW} x {CH}</span>
+        </div>
+        <div className="canvas-container">
+          <div className="canvas-frame">
+            <Canvas ref={canvasRef} />
+          </div>
         </div>
       </main>
-
-      {/* ---- 底部工具栏 ---- */}
-      <div className="app-toolbar">
-        <ToolBar
-          isListening={isListening}
-          isProcessing={isProcessing}
-          onStartListening={startListening}
-          onStopListening={handleStopListening}
-          canvasRef={canvasRef}
-        />
-      </div>
-
-      {/* ---- 右下角反馈面板 ---- */}
-      <footer className="app-feedback">
-        <FeedbackPanel responseText={responseText} history={history} />
-        {speechError && (
-          <div className="app-speech-error">{speechError}</div>
-        )}
-      </footer>
     </div>
   );
 }
