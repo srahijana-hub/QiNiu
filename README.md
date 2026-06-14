@@ -12,9 +12,11 @@ B站链接： https://b23.tv/hRav7bh
 
 ## 效果展示
 
-![56ca291327d47276b4d890c88a7837ca](D:\QiNiu\public\56ca291327d47276b4d890c88a7837ca.png)
+![63a24c6c37a40630dc1b542e5ada2547](public/63a24c6c37a40630dc1b542e5ada2546.png)
 
-![63a24c6c37a40630dc1b542e5ada2546](D:\QiNiu\public\63a24c6c37a40630dc1b542e5ada2546.png)
+
+![63a24c6c37a40630dc1b542e5ada2546](/public/56ca291327d47276b4d890c88a7837ca.png)
+
 
 ## 功能特性
 
