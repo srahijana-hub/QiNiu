@@ -1,185 +1,260 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { SpeechRecognizer } from './core/speech'
-import { ImageGenerator } from './core/image'
+import { useRef, useCallback, useState } from 'react';
+import { Canvas } from './components/Canvas';
+import type { CanvasHandle } from './components/Canvas';
+import { VoiceIndicator } from './components/VoiceIndicator';
+import { FeedbackPanel } from './components/FeedbackPanel';
+import { ToolBar } from './components/ToolBar';
+import { BackgroundDots } from './components/BackgroundDots';
+import { useVoiceCommands } from './hooks/useVoiceCommands';
+import { useDrawingStore } from './store/drawingStore';
+import { ShapeFactory } from './core/canvas/ShapeFactory';
+import { TransformManager } from './core/canvas/TransformManager';
+import type { Command, CommandParams } from './types/commands';
+import type { CanvasState } from './types/canvas';
+import './App.css';
+
+// ============================================================
+// 常量
+// ============================================================
+
+const CW = 1200;
+const CH = 800;
+
+// ============================================================
+// Command Dispatcher（轻量内联，避免修改 core/）
+// ============================================================
+
+function resolveTargetId(
+  targetId: string,
+  shapes: { id: string }[],
+): string | null {
+  if (targetId === 'last') return shapes.length > 0 ? shapes[shapes.length - 1].id : null;
+  return targetId;
+}
+
+function resolveTargetIds(
+  targetId: string,
+  shapes: { id: string }[],
+): string[] {
+  if (targetId === 'all') return shapes.map((s) => s.id);
+  const id = resolveTargetId(targetId, shapes);
+  return id ? [id] : [];
+}
+
+/** 单条指令分发 */
+function dispatchCommand(cmd: Command, factory: ShapeFactory, tm: TransformManager) {
+  const store = useDrawingStore.getState();
+
+  switch (cmd.action) {
+    // ---- create ----
+    case 'create_circle':
+      store.addShape(factory.createCircle(cmd.params as any)); break;
+    case 'create_rect':
+      store.addShape(factory.createRect(cmd.params as any)); break;
+    case 'create_line':
+      store.addShape(factory.createLine(cmd.params as any)); break;
+    case 'create_triangle':
+      store.addShape(factory.createTriangle(cmd.params as any)); break;
+    case 'create_ellipse':
+      store.addShape(factory.createEllipse(cmd.params as any)); break;
+    case 'create_polygon':
+      store.addShape(factory.createPolygon(cmd.params as any)); break;
+    case 'create_text':
+      store.addShape(factory.createText(cmd.params as any)); break;
+
+    // ---- transform ----
+    case 'move': {
+      const p = cmd.params as any;
+      const tid = resolveTargetId(p.targetId, store.shapes);
+      if (!tid) break;
+      const s = store.shapes.find((x) => x.id === tid);
+      if (s) store.updateShape(tid, tm.moveShape(s, p.dx, p.dy));
+      break;
+    }
+    case 'scale': {
+      const p = cmd.params as any;
+      const tid = resolveTargetId(p.targetId, store.shapes);
+      if (!tid) break;
+      const s = store.shapes.find((x) => x.id === tid);
+      if (s) store.updateShape(tid, tm.scaleShape(s, p.factor));
+      break;
+    }
+    case 'rotate': {
+      const p = cmd.params as any;
+      const tid = resolveTargetId(p.targetId, store.shapes);
+      if (!tid) break;
+      const s = store.shapes.find((x) => x.id === tid);
+      if (s) store.updateShape(tid, tm.rotateShape(s, p.angle));
+      break;
+    }
+
+    // ---- delete ----
+    case 'delete_shape': {
+      const p = cmd.params as any;
+      const tid = resolveTargetId(p.targetId, store.shapes);
+      if (tid) store.removeShape(tid);
+      break;
+    }
+    case 'delete_all':
+    case 'clear':
+      store.clearAll();
+      break;
+
+    // ---- style ----
+    case 'set_color': {
+      const p = cmd.params as any;
+      const tids = resolveTargetIds(p.targetId, store.shapes);
+      const su: any = {};
+      if (p.property === 'fill' || p.property === 'both') su.fill = p.color;
+      if (p.property === 'stroke' || p.property === 'both') su.stroke = p.color;
+      for (const id of tids) store.updateShape(id, { style: su } as any);
+      break;
+    }
+    case 'set_stroke_width': {
+      const p = cmd.params as any;
+      const tids = resolveTargetIds(p.targetId, store.shapes);
+      for (const id of tids) store.updateShape(id, { style: { strokeWidth: p.width } } as any);
+      break;
+    }
+    case 'set_fill': {
+      const p = cmd.params as any;
+      const tids = resolveTargetIds(p.targetId, store.shapes);
+      for (const id of tids) {
+        const shape = store.shapes.find((x) => x.id === id);
+        store.updateShape(id, { style: { fill: p.filled ? (p.color ?? shape?.style.stroke ?? '#000000') : undefined } } as any);
+      }
+      break;
+    }
+    case 'set_line_style': {
+      const p = cmd.params as any;
+      const tids = resolveTargetIds(p.targetId, store.shapes);
+      for (const id of tids) store.updateShape(id, { style: { lineStyle: p.style } } as any);
+      break;
+    }
+    case 'set_opacity': {
+      const p = cmd.params as any;
+      const tids = resolveTargetIds(p.targetId, store.shapes);
+      for (const id of tids) store.updateShape(id, { style: { opacity: p.opacity } } as any);
+      break;
+    }
+
+    // ---- canvas ----
+    case 'undo': store.undo(); break;
+    case 'redo': store.redo(); break;
+    case 'save': {
+      // save is handled by ToolBar
+      console.log('[dispatch] save handled externally');
+      break;
+    }
+
+    case 'zoom_in':
+    case 'zoom_out':
+    case 'modify_position':
+    case 'modify_size':
+    case 'modify_props':
+      break; // 未实现，静默跳过
+
+    default:
+      console.warn('[dispatch] unknown action:', (cmd as any).action);
+  }
+}
+
+// ============================================================
+// App
+// ============================================================
 
 function App() {
-  const [isListening, setIsListening] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [transcript, setTranscript] = useState('')
-  const [error, setError] = useState('')
-  const [logs, setLogs] = useState<string[]>([])
-  const [inputText, setInputText] = useState('')
+  const canvasRef = useRef<CanvasHandle>(null);
+  const factoryRef = useRef(new ShapeFactory(CW, CH));
+  const tmRef = useRef(new TransformManager());
 
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
-  const recognizerRef = useRef<SpeechRecognizer | null>(null)
-  const imageGenRef = useRef<ImageGenerator | null>(null)
+  const {
+    isListening,
+    isProcessing,
+    transcript,
+    speechError,
+    startListening,
+    stopListening,
+    processTranscript,
+    speakResponse,
+  } = useVoiceCommands();
 
-  const addLog = (msg: string) => {
-    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`])
-  }
+  const [responseText, setResponseText] = useState('');
+  const [history, setHistory] = useState<string[]>([]);
 
-  useEffect(() => {
-    const el = canvasRef.current
-    if (!el) return
-    const ctx = el.getContext('2d')
-    if (!ctx) return
-    ctxRef.current = ctx
-    imageGenRef.current = new ImageGenerator()
-    addLog('画布已初始化')
-  }, [])
+  const getCanvasState = useDrawingStore((s) => s.getCanvasState);
 
-  const clearCanvas = () => {
-    const el = canvasRef.current
-    const ctx = ctxRef.current
-    if (!el || !ctx) return
-    ctx.clearRect(0, 0, el.width, el.height)
-    addLog('画布已清空')
-  }
+  // ========== 语音 → LLM → 绘图 完整流程 ==========
+  const handleStopListening = useCallback(async () => {
+    stopListening();
 
-  const generateImage = async (prompt: string) => {
-    if (!imageGenRef.current || !ctxRef.current || !canvasRef.current) return
+    if (!transcript.trim()) return;
 
-    setIsProcessing(true)
-    setError('')
-    addLog(`生成中: "${prompt}"`)
+    // 获取当前画布状态
+    const canvasState: CanvasState = getCanvasState();
 
     try {
-      const img = await imageGenRef.current.generateAndLoad(prompt)
-      const ctx = ctxRef.current
-      const canvas = canvasRef.current
+      const llmRes = await processTranscript(transcript, canvasState);
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      // 执行 LLM 返回的指令
+      for (const cmd of llmRes.commands) {
+        dispatchCommand(cmd, factoryRef.current, tmRef.current);
+      }
 
-      const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
-      const w = img.width * scale
-      const h = img.height * scale
-      const x = (canvas.width - w) / 2
-      const y = (canvas.height - h) / 2
+      // 更新反馈面板
+      setResponseText(llmRes.responseText);
+      setHistory((prev) => [`🎙 ${transcript}`, ...prev].slice(0, 20));
 
-      ctx.drawImage(img, x, y, w, h)
-      addLog(`生成完成 (${img.width}x${img.height})`)
-    } catch (err) {
-      const msg = `生成失败: ${err instanceof Error ? err.message : err}`
-      setError(msg)
-      addLog(msg)
-    } finally {
-      setIsProcessing(false)
+      // 语音回复
+      if (llmRes.responseText) speakResponse(llmRes.responseText);
+    } catch {
+      // LLM 解析失败已在 hook 内降级，这里兜底
+      setResponseText('解析指令时出现问题，请重试');
     }
-  }
+  }, [transcript, stopListening, processTranscript, getCanvasState, speakResponse]);
 
-  const submitText = () => {
-    const text = inputText.trim()
-    if (!text) return
-    setTranscript(text)
-    addLog(`输入: "${text}"`)
-    setInputText('')
-    generateImage(text)
-  }
-
-  const startRecording = async () => {
-    const recognizer = new SpeechRecognizer()
-    recognizerRef.current = recognizer
-
-    recognizer.onResult((text) => {
-      setTranscript(text)
-      addLog(`识别结果: "${text}"`)
-      generateImage(text)
-    })
-
-    recognizer.onStateChange((state) => {
-      setIsListening(state.isListening)
-      setIsProcessing(state.isProcessing)
-    })
-
-    recognizer.onError((msg) => {
-      setError(msg)
-      addLog(`错误: ${msg}`)
-    })
-
-    addLog('开始录音...')
-    await recognizer.start()
-    addLog('录音中，请说话...')
-  }
-
-  const stopRecording = () => {
-    addLog('停止录音...')
-    recognizerRef.current?.stop()
-  }
-
+  // ========== 布局 ==========
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
-      {/* 左侧：画布 */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>
-        <h2 style={{ marginBottom: 12 }}>AI 语音绘图</h2>
-        <div style={{ marginBottom: 8 }}>
-          <button onClick={clearCanvas} style={{ fontSize: 13, padding: '6px 16px', background: '#ff9800', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
-            清空画布
-          </button>
+    <div className="app-shell">
+      {/* 背景点阵 */}
+      <BackgroundDots />
+
+      {/* ---- 顶部：3D 粒子声纹中枢 ---- */}
+      <header className="app-top">
+        <VoiceIndicator
+          isListening={isListening}
+          isProcessing={isProcessing}
+          transcript={transcript}
+        />
+      </header>
+
+      {/* ---- 中央画布 ---- */}
+      <main className="app-canvas-stage">
+        <div className="app-canvas-frame">
+          <Canvas ref={canvasRef} />
         </div>
-        <canvas
-          ref={canvasRef}
-          width={800}
-          height={800}
-          style={{ background: '#fff', border: '2px solid #333', borderRadius: 4 }}
+      </main>
+
+      {/* ---- 底部工具栏 ---- */}
+      <div className="app-toolbar">
+        <ToolBar
+          isListening={isListening}
+          isProcessing={isProcessing}
+          onStartListening={startListening}
+          onStopListening={handleStopListening}
+          canvasRef={canvasRef}
         />
       </div>
 
-      {/* 右侧：控制面板 */}
-      <div style={{ width: 360, padding: 20, background: '#fafafa', borderLeft: '1px solid #ddd', display: 'flex', flexDirection: 'column' }}>
-        <h3 style={{ marginBottom: 16 }}>控制面板</h3>
-
-        <div style={{ marginBottom: 16 }}>
-          {!isListening && !isProcessing ? (
-            <button onClick={startRecording} style={{ fontSize: 16, padding: '10px 24px', width: '100%' }}>
-              点击开始录音
-            </button>
-          ) : (
-            <button
-              onClick={stopRecording}
-              disabled={!isListening}
-              style={{ fontSize: 16, padding: '10px 24px', width: '100%', background: '#f44336', color: '#fff', border: 'none', borderRadius: 4 }}
-            >
-              {isProcessing ? '生成中...' : '停止录音'}
-            </button>
-          )}
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>文字输入</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && submitText()}
-              placeholder="描述你想画的内容..."
-              disabled={isProcessing}
-              style={{ flex: 1, padding: '8px 12px', fontSize: 14, border: '1px solid #ccc', borderRadius: 4 }}
-            />
-            <button
-              onClick={submitText}
-              disabled={isProcessing || !inputText.trim()}
-              style={{ padding: '8px 16px', fontSize: 14, background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-            >
-              生成
-            </button>
-          </div>
-        </div>
-
-        {error && <div style={{ color: 'red', marginBottom: 12, fontSize: 14 }}>{error}</div>}
-
-        {transcript && (
-          <div style={{ background: '#e3f2fd', padding: 12, borderRadius: 6, marginBottom: 12 }}>
-            <strong>输入：</strong>{transcript}
-          </div>
+      {/* ---- 右下角反馈面板 ---- */}
+      <footer className="app-feedback">
+        <FeedbackPanel responseText={responseText} history={history} />
+        {speechError && (
+          <div className="app-speech-error">{speechError}</div>
         )}
-
-        <div style={{ flex: 1, background: '#111', color: '#0f0', padding: 12, borderRadius: 6, fontFamily: 'monospace', fontSize: 12, overflow: 'auto' }}>
-          {logs.length === 0 ? '等待操作...' : logs.map((l, i) => <div key={i}>{l}</div>)}
-        </div>
-      </div>
+      </footer>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
