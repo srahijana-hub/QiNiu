@@ -56,7 +56,7 @@ export class ResponseParser {
       id: (cmd.id as string) ?? `cmd_${Date.now()}_${i}`,
       category: (cmd.category as Command['category']) ?? this.inferCategory(cmd.action as string),
       action: cmd.action as CommandAction,
-      params: cmd.params as Command['params'],
+      params: this.normalizeParams(cmd.params as Record<string, unknown>),
       confidence: (cmd.confidence as number) ?? 0.8,
     }));
 
@@ -67,6 +67,16 @@ export class ResponseParser {
       needsClarification: (response.needsClarification as boolean) ?? false,
       rawTranscript: (response.rawTranscript as string) ?? '',
     };
+  }
+
+  private normalizeParams(params: Record<string, unknown>): Record<string, unknown> {
+    if (!params || typeof params !== 'object') return params;
+    const p = { ...params };
+    if ('color' in p && !('fill' in p)) {
+      p.fill = p.color;
+      delete p.color;
+    }
+    return p;
   }
 
   private inferCategory(action: string): Command['category'] {

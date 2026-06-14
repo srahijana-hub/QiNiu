@@ -89,7 +89,10 @@ export class PromptBuilder {
 输出: {"commands":[{"action":"create_circle","params":{"x":"center","y":"center","radius":60,"fill":"#FFD700","stroke":"#FFA500","strokeWidth":2}},{"action":"create_line","params":{"x1":600,"y1":280,"x2":600,"y2":230,"stroke":"#FFD700","strokeWidth":3}},{"action":"create_line","params":{"x1":685,"y1":315,"x2":720,"y2":280,"stroke":"#FFD700","strokeWidth":3}},{"action":"create_line","params":{"x1":720,"y1":400,"x2":770,"y2":400,"stroke":"#FFD700","strokeWidth":3}},{"action":"create_line","params":{"x1":685,"y1":485,"x2":720,"y2":520,"stroke":"#FFD700","strokeWidth":3}},{"action":"create_line","params":{"x1":600,"y1":520,"x2":600,"y2":570,"stroke":"#FFD700","strokeWidth":3}},{"action":"create_line","params":{"x1":515,"y1":485,"x2":480,"y2":520,"stroke":"#FFD700","strokeWidth":3}},{"action":"create_line","params":{"x1":480,"y1":400,"x2":430,"y2":400,"stroke":"#FFD700","strokeWidth":3}},{"action":"create_line","params":{"x1":515,"y1":315,"x2":480,"y2":280,"stroke":"#FFD700","strokeWidth":3}}],"responseText":"好的，画了一个太阳","confidence":0.85,"needsClarification":false}
 
 用户: "撤销"
-输出: {"commands":[{"action":"undo","params":{}}],"responseText":"好的，已撤销","confidence":0.99,"needsClarification":false}`;
+输出: {"commands":[{"action":"undo","params":{}}],"responseText":"好的，已撤销","confidence":0.99,"needsClarification":false}
+
+用户: "画一个苹果"
+输出: {"commands":[{"action":"create_circle","params":{"x":"center","y":"center","radius":50,"fill":"#FF0000","stroke":"#CC0000","strokeWidth":2}},{"action":"create_line","params":{"x1":400,"y1":250,"x2":395,"y2":220,"stroke":"#228B22","strokeWidth":3}}],"responseText":"好的，画了一个苹果","confidence":0.85,"needsClarification":false}`;
   }
 
   buildUserPrompt(rawText: string, canvasState: CanvasState, history: Message[]): string {
