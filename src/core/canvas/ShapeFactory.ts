@@ -5,6 +5,8 @@ import type {
   CreateLineParams,
   CreateTriangleParams,
   CreateEllipseParams,
+  CreatePolygonParams,
+  CreateTextParams,
 } from '../../types/commands';
 
 // ============================================================
@@ -144,6 +146,48 @@ export class ShapeFactory {
     };
   }
 
+  createPolygon(params: CreatePolygonParams): Shape {
+    // 以多边形各顶点的几何中心为 Shape 的 "位置"
+    const centroid = this.computeCentroid(params.points);
+
+    return {
+      id: crypto.randomUUID(),
+      type: 'polygon',
+      x: centroid.x,
+      y: centroid.y,
+      props: {
+        points: params.points,
+      },
+      style: this.buildStyle(params),
+      createdAt: Date.now(),
+    };
+  }
+
+  createText(params: CreateTextParams): Shape {
+    const x = this.resolveX(params.x);
+    const y = this.resolveY(params.y);
+
+    return {
+      id: crypto.randomUUID(),
+      type: 'text',
+      x,
+      y,
+      props: {
+        content: params.content,
+        fontSize: params.fontSize ?? 16,
+        fontFamily: params.fontFamily ?? 'Arial',
+      },
+      style: {
+        fill: params.fill ?? '#000000',
+        stroke: 'transparent',    // 文字不描边
+        strokeWidth: 0,
+        lineStyle: 'solid',
+        opacity: 1,
+      },
+      createdAt: Date.now(),
+    };
+  }
+
   // ============================================================
   // 内部辅助方法
   // ============================================================
@@ -172,5 +216,15 @@ export class ShapeFactory {
       lineStyle: DEFAULT_STYLE.lineStyle,
       opacity: overrides.opacity ?? DEFAULT_STYLE.opacity,
     };
+  }
+
+  /** 计算多边形各顶点的几何中心 */
+  private computeCentroid(points: Array<{ x: number; y: number }>): { x: number; y: number } {
+    const n = points.length;
+    if (n === 0) return { x: 0, y: 0 };
+
+    const sumX = points.reduce((s, p) => s + p.x, 0);
+    const sumY = points.reduce((s, p) => s + p.y, 0);
+    return { x: sumX / n, y: sumY / n };
   }
 }
