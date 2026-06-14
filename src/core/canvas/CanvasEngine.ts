@@ -5,6 +5,8 @@ import type {
   CreateLineParams,
   CreateTriangleParams,
   CreateEllipseParams,
+  CreatePolygonParams,
+  CreateTextParams,
 } from '../../types/commands';
 import { ShapeFactory } from './ShapeFactory';
 
@@ -87,6 +89,20 @@ export class CanvasEngine {
     return shape;
   }
 
+  /** 绘制多边形（按 points 数组顺序连线并闭合） */
+  drawPolygon(params: CreatePolygonParams): Shape {
+    const shape = this.factory.createPolygon(params);
+    this.renderShape(shape);
+    return shape;
+  }
+
+  /** 绘制文字 */
+  drawText(params: CreateTextParams): Shape {
+    const shape = this.factory.createText(params);
+    this.renderShape(shape);
+    return shape;
+  }
+
   // ============================================================
   // 画布级操作
   // ============================================================
@@ -114,10 +130,27 @@ export class CanvasEngine {
 
   /**
    * 根据 Shape 对象执行实际绘制
-   * 统一处理样式应用 → 路径构建 → 填充/描边
+   * - 文字（text）使用 fillText 直接渲染，不走路径
+   * - 其余图形走「构建路径 → 填充 → 描边」流程
    */
   private renderShape(shape: Shape): void {
     const ctx = this.ctx;
+
+    // --- 文字：fillText 渲染，不描边 ---
+    if (shape.type === 'text') {
+      ctx.save();
+      ctx.globalAlpha = shape.style.opacity;
+      ctx.fillStyle = shape.style.fill ?? '#000000';
+      ctx.font = `${shape.props.fontSize ?? 16}px ${shape.props.fontFamily ?? 'Arial'}`;
+      ctx.textBaseline = 'top';
+      ctx.fillText(
+        String(shape.props.content ?? ''),
+        shape.x,
+        shape.y,
+      );
+      ctx.restore();
+      return;
+    }
 
     ctx.save();
 
@@ -157,9 +190,11 @@ export class CanvasEngine {
       case 'ellipse':
         this.buildEllipsePath(shape);
         break;
+      case 'polygon':
+        this.buildPolygonPath(shape);
+        break;
       default:
-        // polygon / text 暂未实现
-        console.warn(`[CanvasEngine] 不支持的图形类型: ${shape.type}`);
+        console.warn(`[CanvasEngine] 未知的图形类型: ${shape.type}`);
         ctx.restore();
         return;
     }
@@ -226,6 +261,23 @@ export class CanvasEngine {
 
     ctx.beginPath();
     ctx.ellipse(shape.x, shape.y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.closePath();
+  }
+
+  /** 多边形：按 points 数组依次 moveTo → lineTo，最后闭合 */
+  private buildPolygonPath(shape: Shape): void {
+    const ctx = this.ctx;
+    const points: Array<{ x: number; y: number }> = shape.props.points ?? [];
+
+    if (points.length === 0) return;
+
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+
+    for (let i = 1; i < points.length; i++) {
+      ctx.lineTo(points[i].x, points[i].y);
+    }
+
     ctx.closePath();
   }
 }
