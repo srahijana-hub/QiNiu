@@ -1,2 +1,2 @@
 // Zustand Store
-export {};
+export { useDrawingStore } from './drawingStore';
