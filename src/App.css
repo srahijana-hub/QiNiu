@@ -1,184 +1,404 @@
-.counter {
-  font-size: 16px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  color: var(--accent);
-  background: var(--accent-bg);
-  border: 2px solid transparent;
-  transition: border-color 0.3s;
-  margin-bottom: 24px;
+/* ============================================================
+   App Shell — 无边画布，AI 终端
+   ============================================================ */
 
-  &:hover {
-    border-color: var(--accent-border);
-  }
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-}
-
-.hero {
+.app-shell {
   position: relative;
-
-  .base,
-  .framework,
-  .vite {
-    inset-inline: 0;
-    margin: 0 auto;
-  }
-
-  .base {
-    width: 170px;
-    position: relative;
-    z-index: 0;
-  }
-
-  .framework,
-  .vite {
-    position: absolute;
-  }
-
-  .framework {
-    z-index: 1;
-    top: 34px;
-    height: 28px;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
-      scale(1.4);
-  }
-
-  .vite {
-    z-index: 0;
-    top: 107px;
-    height: 26px;
-    width: auto;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
-      scale(0.8);
-  }
-}
-
-#center {
+  width: 100vw;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 25px;
-  place-content: center;
-  place-items: center;
-  flex-grow: 1;
-
-  @media (max-width: 1024px) {
-    padding: 32px 20px 24px;
-    gap: 18px;
-  }
+  align-items: center;
+  overflow: hidden;
 }
 
-#next-steps {
+/* ============================================================
+   Top — 3D 粒子中枢
+   ============================================================ */
+
+.app-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
   display: flex;
-  border-top: 1px solid var(--border);
-  text-align: left;
+  justify-content: center;
+  padding: 18px 24px;
+  pointer-events: none;
+}
+.app-top > * { pointer-events: auto; }
 
-  & > div {
-    flex: 1 1 0;
-    padding: 32px;
-    @media (max-width: 1024px) {
-      padding: 24px 20px;
-    }
-  }
+/* ============================================================
+   Bottom Toolbar
+   ============================================================ */
 
-  .icon {
-    margin-bottom: 16px;
-    width: 22px;
-    height: 22px;
-  }
-
-  @media (max-width: 1024px) {
-    flex-direction: column;
-    text-align: center;
-  }
+.app-toolbar {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
 }
 
-#docs {
-  border-right: 1px solid var(--border);
+/* ============================================================
+   Center Canvas Stage
+   ============================================================ */
 
-  @media (max-width: 1024px) {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-}
-
-#next-steps ul {
-  list-style: none;
-  padding: 0;
+.app-canvas-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   display: flex;
-  gap: 8px;
-  margin: 32px 0 0;
-
-  .logo {
-    height: 18px;
-  }
-
-  a {
-    color: var(--text-h);
-    font-size: 16px;
-    border-radius: 6px;
-    background: var(--social-bg);
-    display: flex;
-    padding: 6px 12px;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-    transition: box-shadow 0.3s;
-
-    &:hover {
-      box-shadow: var(--shadow);
-    }
-    .button-icon {
-      height: 18px;
-      width: 18px;
-    }
-  }
-
-  @media (max-width: 1024px) {
-    margin-top: 20px;
-    flex-wrap: wrap;
-    justify-content: center;
-
-    li {
-      flex: 1 1 calc(50% - 8px);
-    }
-
-    a {
-      width: 100%;
-      justify-content: center;
-      box-sizing: border-box;
-    }
-  }
+  align-items: center;
+  justify-content: center;
+  padding: 140px 60px 130px 60px;
 }
 
-#spacer {
-  height: 88px;
-  border-top: 1px solid var(--border);
-  @media (max-width: 1024px) {
-    height: 48px;
-  }
-}
-
-.ticks {
-  position: relative;
+.app-canvas-frame {
   width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-radius: 12px;
+  box-shadow: inset 0 0 80px rgba(245,158,11,0.02);
+}
 
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    top: -4.5px;
-    border: 5px solid transparent;
-  }
+.app-canvas-frame::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 12px;
+  border: 1px solid var(--border-faint);
+  pointer-events: none;
+  transition: border-color var(--duration-slow);
+}
 
-  &::before {
-    left: 0;
-    border-left-color: var(--border);
-  }
-  &::after {
-    right: 0;
-    border-right-color: var(--border);
-  }
+.app-canvas-frame:hover::after {
+  border-color: rgba(255,255,255,0.08);
+}
+
+/* 四角装饰 */
+.app-canvas-frame::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 16px;
+  pointer-events: none;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(135deg, rgba(245,158,11,0.08) 0%, transparent 15%, transparent 85%, rgba(245,158,11,0.08) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding: 1px;
+}
+
+/* ============================================================
+   Bottom-Right Feedback
+   ============================================================ */
+
+.app-feedback {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  z-index: 20;
+  max-width: 380px;
+  width: 100%;
+}
+
+.app-speech-error {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #f87171;
+  text-align: right;
+  font-family: var(--font-mono);
+}
+
+/* ============================================================
+   Voice Indicator
+   ============================================================ */
+
+.voice-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 3D Canvas 尺寸 */
+.voice-particle-stage {
+  width: 120px;
+  height: 120px;
+  position: relative;
+  cursor: default;
+}
+
+.voice-particle-fallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245,158,11,0.15) 0%, transparent 70%);
+}
+
+.voice-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: color var(--duration-normal) var(--ease-out);
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.voice-label--listening { color: var(--gold-400); text-shadow: 0 0 12px var(--gold-glow); }
+.voice-label--processing { color: var(--orange-400); text-shadow: 0 0 12px var(--orange-glow); }
+
+/* 实时文字 */
+.voice-transcript {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 4px;
+}
+
+/* ============================================================
+   Toolbar — bottom horizontal
+   ============================================================ */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-lg);
+  background: var(--void-glass);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-faint);
+}
+
+.toolbar__section {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar__sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border-subtle);
+  margin: 0 6px;
+}
+
+/* main mic button */
+.tb-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(245,158,11,0.2);
+  background: rgba(245,158,11,0.08);
+  color: var(--amber-400);
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+  font-family: var(--font-sans);
+}
+.tb-main:hover:not(:disabled) {
+  background: rgba(245,158,11,0.15);
+  border-color: rgba(245,158,11,0.35);
+  color: #fcd34d;
+}
+.tb-main:active:not(:disabled) { transform: scale(0.96); }
+.tb-main:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.tb-main--active {
+  background: rgba(251,191,36,0.12);
+  border-color: rgba(251,191,36,0.35);
+  color: var(--gold-400);
+  box-shadow: 0 0 24px var(--gold-glow);
+}
+
+.tb-main__icon { display: flex; flex-shrink: 0; }
+.tb-main__label { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.tb-main__hint { font-size: 10px; color: var(--text-muted); white-space: nowrap; margin-left: 2px; }
+
+/* small action buttons */
+.tb-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s var(--ease-out);
+  font-family: var(--font-sans);
+}
+.tb-item:hover:not(:disabled) {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-primary);
+}
+.tb-item:active:not(:disabled) { transform: scale(0.94); }
+.tb-item:disabled { opacity: 0.25; cursor: not-allowed; }
+
+.tb-item__label { font-size: 12px; font-weight: 500; white-space: nowrap; }
+
+.tb-item--danger:hover:not(:disabled) {
+  background: rgba(239,68,68,0.12);
+  color: #f87171;
+}
+
+/* ============================================================
+   Feedback Panel
+   ============================================================ */
+
+.feedback-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  background: var(--void-glass);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-faint);
+  max-height: 280px;
+  overflow: hidden;
+}
+
+/* ---- 前缀 ---- */
+.feedback-prefix {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--amber-400);
+  margin-bottom: 6px;
+}
+
+.feedback-prefix__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber-400);
+  box-shadow: 0 0 6px var(--amber-glow);
+  animation: dot-blink 1.5s ease-in-out infinite;
+}
+
+@keyframes dot-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ---- 回复文字 ---- */
+.feedback-text {
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  text-shadow: 0 0 1px var(--text-glow);
+  min-height: 1.4em;
+}
+
+.feedback-text--placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* 打字机光标 */
+.feedback-cursor {
+  color: var(--amber-400);
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ---- 终端历史 ---- */
+/* ---- scanline ---- */
+.feedback-scanline {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+}
+
+.feedback-console {
+  position: relative;
+  max-height: 140px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.feedback-console__empty {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.feedback-console__line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 0;
+  transition: opacity var(--duration-normal);
+}
+
+.feedback-console__prompt {
+  color: var(--gold-400);
+  flex-shrink: 0;
+  font-size: 10px;
+}
+
+.feedback-console__time {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.feedback-console__msg {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Drawing Canvas
+   ============================================================ */
+
+.drawing-canvas {
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 1px rgba(245,158,11,0.2),
+    0 0 80px rgba(245,158,11,0.08),
+    0 12px 40px rgba(0,0,0,0.6);
 }
